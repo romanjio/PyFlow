@@ -4,4 +4,4 @@ flet==0.18.0
 flet-core==0.18.0
 pandas==2.1.4
 xlwings==0.30.13
-
+sqlalchemy==2.0.27
