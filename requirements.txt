@@ -1,7 +1,7 @@
 #python==3.11.6
 pyodbc==5.0.1
-flet==0.18.0
-flet-core==0.18.0
+flet==0.21.0
+flet-core==0.21.0
 pandas==2.1.4
 xlwings==0.30.13
 
