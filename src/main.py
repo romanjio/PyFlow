@@ -60,7 +60,7 @@ def csv_task(sql_query_path: str, csv_path: str, server: str, database: str):
         # data_extractor = DataExtractor_Postgres()
         sql_query = open(sql_query_path).read()
         data = extract_data(server, database, sql_query=sql_query, timeout=900)
-        print(data)
+        #print(data)
         if os.path.isdir(csv_path):
             # Если csv_path является директорией, генерируем уникальное имя файла
             timestamp = datetime.datetime.now().strftime("%Y%m%d_%H_%M")
@@ -91,7 +91,7 @@ def dependency(dependency_path: str, server: str, database: str):
         # print(df)
         if df[df['DWH'] != 1].empty:
             # Зависимости выполнены
-            print(df)
+            #print(df)
             return True
         else:
             # print("Зависимости не выполнены")
@@ -177,13 +177,7 @@ def main(page: ft.Page):
         page.update()
 
     def execute_task(task):
-        if str(datetime.datetime.now().weekday()) not in task.segment_but.selected:
-            tab_logs.content.controls.append(ft.Text(f"{current_time}: Tables are not updated"))
-            task.prog_ring.visible = False
-            task.deactivate_button.disabled = False
-            page.update()
-            return 
-        
+
         task.deactivate_button.disabled = True
         task.prog_ring.visible = True
         page.update()
@@ -197,10 +191,10 @@ def main(page: ft.Page):
 
         if not dependencies_met:
             # Если зависимости не выполнены, переносим задачу в очередь через 1200 секунд
-            thread = threading.Timer(1200, lambda: task_queue.put(task))
+            thread = threading.Timer(20, lambda: task_queue.put(task))
             thread.start()
             task.thread = thread
-            tab_logs.content.controls.append(ft.Text(f"{current_time}: Tables are not updated"))
+            tab_logs.content.controls.append(ft.Text(f"{current_time}: Tables for task {task.name.value} are not updated"))
             task.prog_ring.visible = False
             task.deactivate_button.disabled = False
             page.update()
@@ -224,20 +218,37 @@ def main(page: ft.Page):
         if t.startswith("Файл обновлен"):
             task.last_update_time.value = f"{datetime.datetime.now()}"
         page.update()
-        if task.segment_but.selected == {'2'}:
-            scheduled_time = datetime.datetime.strptime(task.schedule_time.value, "%H:%M:%S").time()
-            next_day = datetime.datetime.combine(datetime.date.today() + datetime.timedelta(days=1), scheduled_time)
-            time_diff = next_day - datetime.datetime.now()
-            seconds_to_wait_on_next_day = max(time_diff.total_seconds(), 0)
-            # Запускаем таймер для следующего выполнения задачи
-            thread = threading.Timer(seconds_to_wait_on_next_day, lambda: task_queue.put(task))
-            thread.start()
-            task.thread = thread
+
+        scheduled_time = datetime.datetime.strptime(task.schedule_time.value, "%H:%M:%S").time() #запланированное время
+        selected_weekdays = task.segment_but.selected #выбраные дни недели
+        current_week_day = datetime.datetime.now().weekday() #текущий день недели
+        current_time = datetime.datetime.now().time() #текущее время
+        
+        # Находим ближайший выбранный день недели 
+        if str(current_week_day) in selected_weekdays and len(selected_weekdays) == 1:
+            print('Функция обновляется один раз в неделю')
+            days_to_next_weekday = 7
         else:
-            task.active_button.disabled = False
-            task.change_status()
-            task.thread = None
-            page.update()
+            # Находим ближайший выбранный день недели
+            next_weekdays = [int(day) for day in selected_weekdays if int(day) > current_week_day]
+            if not next_weekdays:
+                # Если нет выбранных дней на этой неделе, берем первый выбранный день на следующей неделе
+                next_weekday = min(int(day) for day in selected_weekdays)
+                days_to_next_weekday = (7 - current_week_day + next_weekday) % 7
+            else:
+                next_weekday = min(next_weekdays)
+                days_to_next_weekday = next_weekday - current_week_day
+
+        next_weekday_date = datetime.datetime.now() + datetime.timedelta(days=days_to_next_weekday)
+        time_diff = datetime.datetime.combine(next_weekday_date.date(), scheduled_time) - datetime.datetime.combine(
+            datetime.date.today(), current_time)
+        print(time_diff)
+        seconds_to_wait = max(time_diff.total_seconds(),0)
+        print(seconds_to_wait)
+            
+        thread = threading.Timer(seconds_to_wait, lambda: task_queue.put(task))
+        thread.start()
+        task.thread = thread
         # print("close_execute_task func")
 
 
@@ -256,6 +267,7 @@ def main(page: ft.Page):
                 datetime.date.today(), current_time)
             # Вычисляем количество секунд до запланированного времени, но не менее 0
             seconds_to_wait = max(time_diff.total_seconds(), 0)
+            print(seconds_to_wait)
         else:
             # Находим ближайший выбранный день недели на следующей неделе
             next_weekdays = [int(day) for day in selected_weekdays if int(day) > current_week_day]
@@ -278,8 +290,6 @@ def main(page: ft.Page):
         thread.start()
         task.thread = thread
         # print("close active_ func")
-
-
 
 
     def deactivate_(task):
@@ -355,7 +365,7 @@ def main(page: ft.Page):
             )
             super().__init__(selected_icon=ft.Icon(ft.icons.CIRCLE_SHARP),
                              scale=0.8,
-                             selected={"1"},
+                             selected={"0"},
                              # on_change=lambda _: handle_change(self),
                              segments=[self.seg1, self.seg2,self.seg3,self.seg4,self.seg5,self.seg6,self.seg7],
                              style=ft.ButtonStyle(bgcolor={ft.MaterialState.SELECTED: ft.colors.INDIGO_300},
