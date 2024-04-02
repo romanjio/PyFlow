@@ -59,7 +59,7 @@ def csv_task(sql_query_path: str, csv_path: str, server: str, database: str):
             return "Не выбран sql скрипт или путь для csv файла"
         # data_extractor = DataExtractor_Postgres()
         sql_query = open(sql_query_path).read()
-        data = extract_data(server, database, sql_query=sql_query, timeout=900)
+        data = extract_data(server, database, sql_query=sql_query, timeout=1500)
         #print(data)
         if os.path.isdir(csv_path):
             # Если csv_path является директорией, генерируем уникальное имя файла
@@ -191,7 +191,7 @@ def main(page: ft.Page):
 
         if not dependencies_met:
             # Если зависимости не выполнены, переносим задачу в очередь через 1200 секунд
-            thread = threading.Timer(20, lambda: task_queue.put(task))
+            thread = threading.Timer(1200, lambda: task_queue.put(task))
             thread.start()
             task.thread = thread
             tab_logs.content.controls.append(ft.Text(f"{current_time}: Tables for task {task.name.value} are not updated"))
@@ -324,47 +324,47 @@ def main(page: ft.Page):
             task_queue.task_done()
             time.sleep(1)
 
-    # создаем очередь с помощью функции create_task_queue()
 
     class segment_but(ft.SegmentedButton):
         def __init__(self):
             self.seg1 = ft.Segment(
                 value="0",
-                label=ft.Text("#Monday "),
+                label=ft.Text("Monday "),
                 # icon=ft.Icon(ft.icons.LOOKS_ONE),
             )
             self.seg2 = ft.Segment(
                 value="1",
-                label=ft.Text("#Tuesday"),
+                label=ft.Text("Tuesday"),
                 # icon=ft.Icon(ft.icons.LOOKS_ONE),
             )
             self.seg3 = ft.Segment(
                 value="2",
-                label=ft.Text("#Wednesday"),
+                label=ft.Text("Wednesday"),
                 # icon=ft.Icon(ft.icons.LOOKS_ONE),
             )
             self.seg4 = ft.Segment(
                 value="3",
-                label=ft.Text("#Thursday"),
+                label=ft.Text("Thursday"),
                 # icon=ft.Icon(ft.icons.LOOKS_ONE),
             )
             self.seg5 = ft.Segment(
                 value="4",
-                label=ft.Text("#Friday"),
+                label=ft.Text("Friday"),
                 # icon=ft.Icon(ft.icons.LOOKS_ONE),
             )
             self.seg6 = ft.Segment(
                 value="5",
-                label=ft.Text("#Saturday"),
+                label=ft.Text("Saturday"),
                 # icon=ft.Icon(ft.icons.LOOKS_ONE),
             )
             self.seg7 = ft.Segment(
                 value="6",
-                label=ft.Text("#Sunday"),
+                label=ft.Text("Sunday"),
                 # icon=ft.Icon(ft.icons.LOOKS_ONE),
             )
             super().__init__(selected_icon=ft.Icon(ft.icons.CIRCLE_SHARP),
                              scale=0.8,
+                             width=750,
                              selected={"0"},
                              # on_change=lambda _: handle_change(self),
                              segments=[self.seg1, self.seg2,self.seg3,self.seg4,self.seg5,self.seg6,self.seg7],
@@ -476,7 +476,7 @@ def main(page: ft.Page):
 
     class schedule_button(ft.ElevatedButton):
         def __init__(self, task):
-            super().__init__(text="Schedule", icon=ft.icons.TIMER, scale=0.9)
+            super().__init__(text="Schedule", icon=ft.icons.TIMER, scale=0.9, width=135)
             self.on_click = lambda _: time_picker.pick_time(task)
 
     class pipeline_row(ft.DataRow):
@@ -511,7 +511,7 @@ def main(page: ft.Page):
                     ft.DataCell(ft.Text("")),
                     ft.DataCell(self.status),
                     ft.DataCell(
-                        ft.Row(controls=[schedule_button(task=self), self.segment_but])
+                        ft.Row(controls=[schedule_button(task=self), self.segment_but], spacing=10)
                     ),
                     ft.DataCell(self.schedule_time),
                     ft.DataCell(self.last_update_time),
@@ -667,8 +667,11 @@ def main(page: ft.Page):
         def __init__(self, self_tab, rows: list[task_sql_csv | task_excel]):
             super().__init__(heading_row_color=ft.colors.BLACK12,
                              data_row_max_height=80,
+                             column_spacing=25,
+                             
+                             #scale=0.9,
                              columns=[
-                                 ft.DataColumn(ft.Text(value="Task", width=200)),
+                                 ft.DataColumn(ft.Text(value="Task", width=120)),
                                  ft.DataColumn(ft.Text(value="dependencies", width=150)),
                                  ft.DataColumn(ft.Text(value="input file", width=150)),
                                  ft.DataColumn(ft.Text(value="output file", width=150)),
@@ -732,7 +735,7 @@ def main(page: ft.Page):
                              )
 
         def update_tab(self):
-            self.tab_content.text = str(len(self.table.rows))
+            self.tab_content.text = str(len(self.table.rows)) # обновляем счетчик кол-ва задач 
 
     def save_tasks(tab):
         page.client_storage.clear()
@@ -740,7 +743,7 @@ def main(page: ft.Page):
             if page.client_storage.contains_key(f"{task.uuid.value}"):
                 page.client_storage.remove(f"{task.uuid.value}")
 
-            page.client_storage.set(f"{task.uuid.value}", {"name": task.name.value,
+            page.client_storage.set(f"pyflow.{task.uuid.value}", {"name": task.name.value,
                                                            "type": task.type,
                                                            "dependency_path": task.dependency_path.value,
                                                            "in_file_path": task.in_file_path.value,
@@ -754,7 +757,7 @@ def main(page: ft.Page):
         )
 
     def load_tasks():
-        tasks = page.client_storage.get_keys("")
+        tasks = page.client_storage.get_keys("pyflow.")
         # print(tasks)
 
         for task in tasks:
