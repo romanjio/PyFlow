@@ -212,11 +212,11 @@ def main(page: ft.Page):
                 excel_path=task.in_file_path.value,
                 directory_path=task.out_file_path.value,
             )
-        tab_logs.content.controls.append(ft.Text(f"{current_time}: {t}"))
+        tab_logs.content.controls.append(ft.Text(f'{datetime.datetime.now().strftime("%Y-%m-%d %H:%M")}: {t}'))
         task.prog_ring.visible = False
         task.deactivate_button.disabled = False
         if t.startswith("Файл обновлен"):
-            task.last_update_time.value = f"{datetime.datetime.now()}"
+            task.last_update_time.value = f'{datetime.datetime.now().strftime("%Y-%m-%d %H:%M")}'
         page.update()
 
         scheduled_time = datetime.datetime.strptime(task.schedule_time.value, "%H:%M:%S").time() #запланированное время
@@ -326,46 +326,47 @@ def main(page: ft.Page):
 
 
     class segment_but(ft.SegmentedButton):
-        def __init__(self):
+        def __init__(self, selected: set[str]):
             self.seg1 = ft.Segment(
                 value="0",
-                label=ft.Text("Monday "),
+                label=ft.Text("Mon"),
                 # icon=ft.Icon(ft.icons.LOOKS_ONE),
             )
             self.seg2 = ft.Segment(
                 value="1",
-                label=ft.Text("Tuesday"),
+                label=ft.Text("Tue"),
                 # icon=ft.Icon(ft.icons.LOOKS_ONE),
             )
             self.seg3 = ft.Segment(
                 value="2",
-                label=ft.Text("Wednesday"),
+                label=ft.Text("Wed"),
                 # icon=ft.Icon(ft.icons.LOOKS_ONE),
             )
             self.seg4 = ft.Segment(
                 value="3",
-                label=ft.Text("Thursday"),
+                label=ft.Text("Thu"),
                 # icon=ft.Icon(ft.icons.LOOKS_ONE),
             )
             self.seg5 = ft.Segment(
                 value="4",
-                label=ft.Text("Friday"),
+                label=ft.Text("Fri"),
                 # icon=ft.Icon(ft.icons.LOOKS_ONE),
             )
             self.seg6 = ft.Segment(
                 value="5",
-                label=ft.Text("Saturday"),
+                label=ft.Text("Sat"),
                 # icon=ft.Icon(ft.icons.LOOKS_ONE),
             )
             self.seg7 = ft.Segment(
                 value="6",
-                label=ft.Text("Sunday"),
+                label=ft.Text("Sun"),
                 # icon=ft.Icon(ft.icons.LOOKS_ONE),
             )
             super().__init__(selected_icon=ft.Icon(ft.icons.CIRCLE_SHARP),
                              scale=0.8,
-                             width=750,
-                             selected={"0"},
+                             width=590,
+                             left=80,
+                             selected=selected,
                              # on_change=lambda _: handle_change(self),
                              segments=[self.seg1, self.seg2,self.seg3,self.seg4,self.seg5,self.seg6,self.seg7],
                              style=ft.ButtonStyle(bgcolor={ft.MaterialState.SELECTED: ft.colors.INDIGO_300},
@@ -439,6 +440,17 @@ def main(page: ft.Page):
             self.open = True
             page.update()
 
+    class info_dialog(ft.AlertDialog):
+        def __init__(self, title: str):
+            super().__init__(content=ft.Container(title, alignment=ft.alignment.center,height=35), 
+                             content_padding=ft.margin.only(right=10, left=10, top=15),
+                             )
+        
+        def open_info_dialog(self):
+            page.dialog = self
+            self.open = True
+            page.update()
+
     class time_picker(ft.TimePicker):
         def __init__(self):
             super().__init__(confirm_text="Confirm",
@@ -479,20 +491,26 @@ def main(page: ft.Page):
             super().__init__(text="Schedule", icon=ft.icons.TIMER, scale=0.9, width=135)
             self.on_click = lambda _: time_picker.pick_time(task)
 
+    class Text(ft.Text):
+        def __init__(self, value):
+            super().__init__(value=value, scale=1)
+
+
     class pipeline_row(ft.DataRow):
         def __init__(self,
                      name: str,
                      schedule_time: str,
                      last_update_time: str,
+                     segment_but_selected: set[str] = {"1"},
                      ):
             # Инициализация атрибутов класса
             self.uuid = ft.Text(str(uuid.uuid4()))
-            self.name = ft.Text(name)  # имя нашей задачи
-            self.status = ft.Text("stopped")  # Статус задачи
+            self.name = Text(name)  # имя нашей задачи
+            self.status = Text("stopped")  # Статус задачи
             self.schedule_time = ft.Text(schedule_time)  # Время когда нужно выполнить задачу
             self.last_update_time = ft.Text(last_update_time)  # Время когда задача выполнялась последний раз
             self.prog_ring = progress_ring()  # Кольцо состояния загрузки(что задача в данный момент выполняется)
-            self.segment_but = segment_but()  # Кнопка для выбора дня недели для обновления задачи(pipeline-а)
+            self.segment_but = segment_but(selected=segment_but_selected)  # Кнопка для выбора дня недели для обновления задачи(pipeline-а)
             self.active_button = active_button(self)  # Кнопка для отправки задачи на выполнение
             self.deactivate_button = deactivate_button(self)  # Кнопка, что б убрать задачу с выполнения
             self.thread = None  # Ссылка на поток для нашей задачи
@@ -511,7 +529,7 @@ def main(page: ft.Page):
                     ft.DataCell(ft.Text("")),
                     ft.DataCell(self.status),
                     ft.DataCell(
-                        ft.Row(controls=[schedule_button(task=self), self.segment_but], spacing=20)
+                        ft.Stack(controls=[schedule_button(task=self), self.segment_but],expand=True,width=620)
                     ),
                     ft.DataCell(self.schedule_time),
                     ft.DataCell(self.last_update_time),
@@ -531,15 +549,18 @@ def main(page: ft.Page):
                      in_file_path: str = "",
                      out_file_path: str = "",
                      server: str = "localhost",
+                     segment_but_selected: set[str] = {"0"},
                      ):
-            super().__init__(name=name, schedule_time=schedule_time, last_update_time=last_update_time)
+            super().__init__(name=name, schedule_time=schedule_time, last_update_time=last_update_time, segment_but_selected=segment_but_selected)
             self.type = "default1"
             self.sql_dependency = sql_dialog(task=self, save_func=self.save_dependency_path, server=server)
-            self.dependency_path = ft.Text(dependency_path, width=180)  # Переменная для хранения пути к sql файлу
+            self.dependency_path = ft.Text(dependency_path)  # Переменная для хранения пути к sql файлу
+            self.dependency = ft.Text(os.path.basename(dependency_path))
             self.execute_func = csv_task
             self.sql_dialog = sql_dialog(task=self, save_func=self.save_sql_path,
                                          server=server)  # Окно выбора excel файла, имя таблицы и имя листа
-            self.in_file_path = ft.Text(in_file_path, width=180)  # Переменная для хранения пути к sql файлу
+            self.in_file_path = ft.Text(in_file_path)  # Переменная для хранения пути к sql файлу
+            #self.info_dialog = info_dialog(title=self.in_file_path)
             self.FilePicker_csv = ft.FilePicker(
                 on_result=lambda e: self.save_csv_path(e))  # Файловый менеджер для выбора файлов
             self.FilePicker_directory = ft.FilePicker(
@@ -552,14 +573,23 @@ def main(page: ft.Page):
                     scale=0.9,
                     icon=ft.icons.ADD_BOX,
                     on_click=lambda _: self.sql_dependency.open_dlg_modal()),
-                self.dependency_path]
+                ft.IconButton(
+                    scale=0.9,
+                    icon=ft.icons.INFO,
+                    on_click=lambda _: info_dialog(title=ft.Text(self.dependency_path.value)).open_info_dialog()),
+                    self.dependency,
+                ]
             ))
             self.cells[2] = ft.DataCell(ft.Row(controls=[
                 ft.IconButton(
                     scale=0.9,
                     icon=ft.icons.ADD_BOX,
                     on_click=lambda _: self.sql_dialog.open_dlg_modal()),
-                self.in_file_path]
+                ft.IconButton(
+                    scale=0.9,
+                    icon=ft.icons.INFO,
+                    on_click=lambda _: info_dialog(title=ft.Text(self.in_file_path.value)).open_info_dialog()),
+                ]
             ))
             self.cells[3] = ft.DataCell(ft.Row(controls=[
                 ft.IconButton(
@@ -571,7 +601,10 @@ def main(page: ft.Page):
                     scale=0.9,
                     icon=ft.icons.DRIVE_FOLDER_UPLOAD,
                     on_click=lambda _: self.FilePicker_directory.get_directory_path()),
-                self.out_file_path
+                ft.IconButton(
+                    scale=0.9,
+                    icon=ft.icons.INFO,
+                    on_click=lambda _: info_dialog(title=ft.Text(self.out_file_path.value)).open_info_dialog()),
             ]))
 
         def save_csv_path(self, e: ft.FilePickerResultEvent):
@@ -597,6 +630,9 @@ def main(page: ft.Page):
             self.dependency_path.value = (
                 ", ".join(map(lambda f: f.path, e.files)) if e.files else ""
             )
+            self.dependency.value = (
+                ", ".join(map(lambda f: f.name, e.files)) if e.files else self.dependency.value
+            )
             page.update()
 
     class task_excel(pipeline_row):
@@ -606,14 +642,16 @@ def main(page: ft.Page):
                      in_file_path: str = "",
                      out_file_path: str = "",
                      server: str = "",
+                     segment_but_selected: set[str] = {"0"},
                      ):
-            super().__init__(name=name, schedule_time=schedule_time, last_update_time=last_update_time)
+            super().__init__(name=name, schedule_time=schedule_time, last_update_time=last_update_time, segment_but_selected=segment_but_selected)
             self.type = "default2"
             self.execute_func = excel_task
             self.sql_dependency = sql_dialog(
                 task=self, save_func=self.save_dependency_path,
                 server=server)  # Окно выбора sql файла, в данном случае запрос будет проверять наличие актуальных данных
-            self.dependency_path = ft.Text(dependency_path, width=180)  # Переменная для хранения пути к sql файлу
+            self.dependency_path = ft.Text(dependency_path)  # Переменная для хранения пути к sql файлу
+            self.dependency = ft.Text(os.path.basename(dependency_path))
             self.in_file_path = ft.Text(in_file_path)
             self.out_file_path = ft.Text(out_file_path)
             self.FilePicker_excel = ft.FilePicker(
@@ -627,7 +665,12 @@ def main(page: ft.Page):
                     scale=0.9,
                     icon=ft.icons.ADD_BOX,
                     on_click=lambda _: self.sql_dependency.open_dlg_modal()),
-                self.dependency_path]
+                ft.IconButton(
+                    scale=0.9,
+                    icon=ft.icons.INFO,
+                    on_click=lambda _: info_dialog(title=ft.Text(self.dependency_path.value)).open_info_dialog()),
+                    self.dependency,
+                ]
             ))
             self.cells[2] = ft.DataCell(ft.Row(controls=[
                 ft.IconButton(
@@ -635,14 +678,21 @@ def main(page: ft.Page):
                     icon=ft.icons.UPLOAD_FILE,
                     on_click=lambda _: self.FilePicker_excel.pick_files(
                         allowed_extensions=["xlsm", "xlsb", "xls", "xltm", "xla", "xlsx", "xltx"])),
-                self.in_file_path]
+                ft.IconButton(
+                    scale=0.9,
+                    icon=ft.icons.INFO,
+                    on_click=lambda _: info_dialog(title=ft.Text(self.in_file_path.value)).open_info_dialog()),
+                ]
             ))
             self.cells[3] = ft.DataCell(ft.Row(controls=[
                 ft.IconButton(
                     scale=0.9,
                     icon=ft.icons.DRIVE_FOLDER_UPLOAD,
                     on_click=lambda _: self.FilePicker_directory.get_directory_path()),
-                self.out_file_path
+                ft.IconButton(
+                    scale=0.9,
+                    icon=ft.icons.INFO,
+                    on_click=lambda _: info_dialog(title=ft.Text(self.out_file_path.value)).open_info_dialog()),
             ]))
 
         def save_excel_path(self, e: ft.FilePickerResultEvent):
@@ -658,6 +708,10 @@ def main(page: ft.Page):
             self.dependency_path.value = (
                 ", ".join(map(lambda f: f.path, e.files)) if e.files else ""
             )
+            self.dependency.value = (
+                ", ".join(map(lambda f: f.name, e.files)) if e.files else self.dependency.value
+            )
+            
 
         def save_directory_path(self, e: ft.FilePickerResultEvent):
             self.out_file_path.value = e.path if e.path else ""
@@ -666,15 +720,15 @@ def main(page: ft.Page):
     class table(ft.DataTable):
         def __init__(self, self_tab, rows: list[task_sql_csv | task_excel]):
             super().__init__(heading_row_color=ft.colors.BLACK12,
-                             data_row_max_height=80,
+                             data_row_max_height=65,
+                             data_row_min_height=50,
+                             heading_row_height=40,
                              column_spacing=25,
-                             
-                             #scale=0.9,
                              columns=[
-                                 ft.DataColumn(ft.Text(value="Task", width=120)),
-                                 ft.DataColumn(ft.Text(value="dependencies", width=150)),
-                                 ft.DataColumn(ft.Text(value="input file", width=150)),
-                                 ft.DataColumn(ft.Text(value="output file", width=150)),
+                                 ft.DataColumn(ft.Text(value="Task")),
+                                 ft.DataColumn(ft.Text(value="dependencies")),
+                                 ft.DataColumn(ft.Text(value="input file")),
+                                 ft.DataColumn(ft.Text(value="output file/path")),
                                  ft.DataColumn(ft.Text(value="Status")),
                                  ft.DataColumn(ft.Text("Schedule")),
                                  ft.DataColumn(ft.Text("Time update")),
@@ -717,6 +771,7 @@ def main(page: ft.Page):
             # print("Task not found in the table.")
             page.update()
 
+
     class tab(ft.Tab):
         def __init__(self, tab_content: str, rows: list = []):
             # self.text = str(len(content.rows))
@@ -742,7 +797,7 @@ def main(page: ft.Page):
         for task in tab.table.rows:
             if page.client_storage.contains_key(f"{task.uuid.value}"):
                 page.client_storage.remove(f"{task.uuid.value}")
-
+                
             page.client_storage.set(f"pyflow.{task.uuid.value}", {"name": task.name.value,
                                                            "type": task.type,
                                                            "dependency_path": task.dependency_path.value,
@@ -751,6 +806,7 @@ def main(page: ft.Page):
                                                            "schedule_time": task.schedule_time.value,
                                                            "last_update_time": task.last_update_time.value,
                                                            "server": task.sql_dependency.server.value,
+                                                           "segment_but_selected": [i for i in task.segment_but.selected]
                                                            })
         page.show_snack_bar(
             ft.SnackBar(ft.Text("All tasks saved"), open=True, duration=1500)
