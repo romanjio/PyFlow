@@ -511,7 +511,7 @@ def main(page: ft.Page):
                     ft.DataCell(ft.Text("")),
                     ft.DataCell(self.status),
                     ft.DataCell(
-                        ft.Row(controls=[schedule_button(task=self), self.segment_but], spacing=10)
+                        ft.Row(controls=[schedule_button(task=self), self.segment_but], spacing=20)
                     ),
                     ft.DataCell(self.schedule_time),
                     ft.DataCell(self.last_update_time),
