@@ -30,15 +30,22 @@ class DataExtractor_Postgres:
 def extract_data(server: str = 'BI-DEPT01', database: str = 'master', trusted_connection: str = 'yes', sql_query: str = None, timeout: int = 360) -> pd.DataFrame:
     connection_string = f"DRIVER=ODBC Driver 17 for SQL Server;SERVER={server};DATABASE={database};TRUSTED_CONNECTION={trusted_connection};"
 
-    with pyodbc.connect(connection_string, timeout=timeout) as conn:
-        cursor = conn.cursor()
+    try:
+        with pyodbc.connect(connection_string, timeout=timeout) as conn:
+            cursor = conn.cursor()
 
-        cursor.execute(sql_query)
-        rows = cursor.fetchall()
-        columns = [column[0] for column in cursor.description]
+            cursor.execute(sql_query)
+            rows = cursor.fetchall()
+            columns = [column[0] for column in cursor.description]
 
-    # Закрытие соединения происходит автоматически при выходе из блока with
-    df = pd.DataFrame.from_records(rows, columns=columns)
+        df = pd.DataFrame.from_records(rows, columns=columns)
+
+    except Exception as ex:
+        # Если произошла ошибка, связанная с подключением или выполнением запроса
+        # исключение будет поймано здесь
+        print("An error occurred:", ex)
+        # Вернуть DataFrame с одним столбцом "DWH" и значением "0"
+        df = pd.DataFrame({'DWH': [0]})
 
     return df
 
@@ -191,9 +198,14 @@ def main(page: ft.Page):
 
         if not dependencies_met:
             # Если зависимости не выполнены, переносим задачу в очередь через 1200 секунд
-            thread = threading.Timer(1200, lambda: task_queue.put(task))
-            thread.start()
-            task.thread = thread
+            if task.type == "default1":
+                thread = threading.Timer(1200, lambda: task_queue1.put(task))
+                thread.start()
+                task.thread = thread
+            elif task.type == "default2":
+                thread = threading.Timer(1200, lambda: task_queue2.put(task))
+                thread.start()
+                task.thread = thread
             tab_logs.content.controls.append(ft.Text(f"{current_time}: Tables for task {task.name.value} are not updated"))
             task.prog_ring.visible = False
             task.deactivate_button.disabled = False
@@ -245,10 +257,14 @@ def main(page: ft.Page):
         print(time_diff)
         seconds_to_wait = max(time_diff.total_seconds(),0)
         print(seconds_to_wait)
-            
-        thread = threading.Timer(seconds_to_wait, lambda: task_queue.put(task))
-        thread.start()
-        task.thread = thread
+        if task.type == "default1":
+            thread = threading.Timer(seconds_to_wait, lambda: task_queue1.put(task))
+            thread.start()
+            task.thread = thread
+        elif task.type == "default2":
+            thread = threading.Timer(seconds_to_wait, lambda: task_queue2.put(task))
+            thread.start()
+            task.thread = thread
         # print("close_execute_task func")
 
 
@@ -286,9 +302,14 @@ def main(page: ft.Page):
             seconds_to_wait = max(time_diff.total_seconds(), 0)
             print(seconds_to_wait)
             
-        thread = threading.Timer(seconds_to_wait, lambda: task_queue.put(task))
-        thread.start()
-        task.thread = thread
+        if task.type == "default1":
+            thread = threading.Timer(seconds_to_wait, lambda: task_queue1.put(task))
+            thread.start()
+            task.thread = thread
+        elif task.type == "default2":
+            thread = threading.Timer(seconds_to_wait, lambda: task_queue2.put(task))
+            thread.start()
+            task.thread = thread
         # print("close active_ func")
 
 
@@ -641,7 +662,7 @@ def main(page: ft.Page):
                      dependency_path: str = "",
                      in_file_path: str = "",
                      out_file_path: str = "",
-                     server: str = "",
+                     server: str = "BI-DEPT01",
                      segment_but_selected: set[str] = {"0"},
                      ):
             super().__init__(name=name, schedule_time=schedule_time, last_update_time=last_update_time, segment_but_selected=segment_but_selected)
@@ -837,7 +858,9 @@ def main(page: ft.Page):
             # else:
             # print(f"Об'єкт с таким именем уже существует")
 
-    task_queue = create_task_queue()
+    task_queue1 = create_task_queue()
+
+    task_queue2 = create_task_queue()
 
     add_task_1 = ft.ElevatedButton(icon=ft.icons.ADD_CIRCLE, text="update excel",
                                    on_click=lambda _: tab_all.table.create_task(task=task_excel()))
