@@ -3,4 +3,7 @@ venv/
 myvenv/
 dist/
 build/
+.idea/
 main.spec
+main.cmd
+main.exe
