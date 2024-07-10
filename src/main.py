@@ -12,7 +12,7 @@ import flet as ft
 from flet_core import icons, ButtonStyle, IconButton, colors, TimePickerEntryMode, MainAxisAlignment
 import pandas as pd
 import xlwings as xw
-
+import csv
 '''
 class DataExtractor_Postgres:
     def __init__(self, host: str = 'localhost', port: int = 5432, database: str = 'app_database',
@@ -27,18 +27,16 @@ class DataExtractor_Postgres:
 '''
 
 
-def extract_data(server: str = 'BI-DEPT01', database: str = 'master', trusted_connection: str = 'yes', sql_query: str = None, timeout: int = 360) -> pd.DataFrame:
+def extract_data(server: str = 'BI-DEPT01', database: str = 'master', trusted_connection: str = 'yes', sql_query: str = None, timeout: int = 60) -> pd.DataFrame:
     connection_string = f"DRIVER=ODBC Driver 17 for SQL Server;SERVER={server};DATABASE={database};TRUSTED_CONNECTION={trusted_connection};"
 
     try:
         with pyodbc.connect(connection_string, timeout=timeout) as conn:
             cursor = conn.cursor()
-
             cursor.execute(sql_query)
             rows = cursor.fetchall()
             columns = [column[0] for column in cursor.description]
-
-        df = pd.DataFrame.from_records(rows, columns=columns)
+            df = pd.DataFrame.from_records(rows, columns=columns)
 
     except Exception as ex:
         # Если произошла ошибка, связанная с подключением или выполнением запроса
@@ -59,23 +57,30 @@ def generate_unique_filename(base_path, base_filename):
     return os.path.join(base_path, f"{filename}_{timestamp}{extension}")
 '''
 
-
-def csv_task(sql_query_path: str, csv_path: str, server: str, database: str):
+def csv_task(sql_query_path: str, csv_path: str, server: str, database: str, trusted_connection: str = 'yes'):  
     try:
         if not sql_query_path:
-            return "Не выбран sql скрипт или путь для csv файла"
+            return "Не выбран sql скрипт"
         # data_extractor = DataExtractor_Postgres()
         sql_query = open(sql_query_path).read()
-        data = extract_data(server, database, sql_query=sql_query, timeout=1500)
-        #print(data)
+        connection_string = f"DRIVER=ODBC Driver 17 for SQL Server;SERVER={server};DATABASE={database};TRUSTED_CONNECTION={trusted_connection};"
         if os.path.isdir(csv_path):
             # Если csv_path является директорией, генерируем уникальное имя файла
             timestamp = datetime.datetime.now().strftime("%Y%m%d_%H_%M")
             filename, extension = os.path.splitext(os.path.basename(sql_query_path))
             csv_path = os.path.join(csv_path, f"{filename}_{timestamp}.csv")
+        with pyodbc.connect(connection_string, timeout=1800) as conn:
+            cursor = conn.cursor()
+            cursor.execute(sql_query)
+            if csv_path:
+                # производим запись в csv файл
+                with open(csv_path, 'w', newline='', encoding='utf-8') as f:
+                    writer = csv.writer(f,delimiter=',')
+                    writer.writerow([i[0] for i in cursor.description])
+                    for row in cursor:
+                        writer.writerow(row)
 
-        data.to_csv(rf"{csv_path}", index=False, sep=";", )
-        # Определяем диапазон данных
+        
         return f"Файл обновлен: {csv_path}"
     except FileNotFoundError as e1:
         return f"Error: Файл не найден. {e1}"
@@ -183,68 +188,17 @@ def main(page: ft.Page):
         page.theme_mode = "light" if page.theme_mode == "dark" else "dark"
         page.update()
 
-    def execute_task(task):
+    def calculate_time_difference(task_schedule_time, selected_weekdays):
+        scheduled_time = task_schedule_time
+        current_week_day = datetime.datetime.now().weekday()
+        current_time = datetime.datetime.now().time()
 
-        task.deactivate_button.disabled = True
-        task.prog_ring.visible = True
-        page.update()
-        current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
-        # Проверяем зависимости
-        dependencies_met = dependency(
-            dependency_path=task.dependency_path.value,
-            server=task.sql_dependency.server.value,
-            database=task.sql_dependency.database.value,
-        )
-
-        if not dependencies_met:
-            # Если зависимости не выполнены, переносим задачу в очередь через 1200 секунд
-            if task.type == "default1":
-                thread = threading.Timer(1200, lambda: task_queue1.put(task))
-                thread.start()
-                task.thread = thread
-            elif task.type == "default2":
-                thread = threading.Timer(1200, lambda: task_queue2.put(task))
-                thread.start()
-                task.thread = thread
-            tab_logs.content.controls.append(ft.Text(f"{current_time}: Tables for task {task.name.value} are not updated"))
-            task.prog_ring.visible = False
-            task.deactivate_button.disabled = False
-            page.update()
-            return
-        # Продолжаем выполнение задачи
-        if task.type == "default1":
-            t = task.execute_func(
-                sql_query_path=task.in_file_path.value,
-                csv_path=task.out_file_path.value,
-                server=task.sql_dialog.server.value,
-                database=task.sql_dialog.database.value,
-            )
-        elif task.type == "default2":
-            t = task.execute_func(
-                excel_path=task.in_file_path.value,
-                directory_path=task.out_file_path.value,
-            )
-        tab_logs.content.controls.append(ft.Text(f'{datetime.datetime.now().strftime("%Y-%m-%d %H:%M")}: {t}'))
-        task.prog_ring.visible = False
-        task.deactivate_button.disabled = False
-        if t.startswith("Файл обновлен"):
-            task.last_update_time.value = f'{datetime.datetime.now().strftime("%Y-%m-%d %H:%M")}'
-        page.update()
-
-        scheduled_time = datetime.datetime.strptime(task.schedule_time.value, "%H:%M:%S").time() #запланированное время
-        selected_weekdays = task.segment_but.selected #выбраные дни недели
-        current_week_day = datetime.datetime.now().weekday() #текущий день недели
-        current_time = datetime.datetime.now().time() #текущее время
-        
-        # Находим ближайший выбранный день недели 
         if str(current_week_day) in selected_weekdays and len(selected_weekdays) == 1:
             print('Функция обновляется один раз в неделю')
             days_to_next_weekday = 7
         else:
-            # Находим ближайший выбранный день недели
             next_weekdays = [int(day) for day in selected_weekdays if int(day) > current_week_day]
             if not next_weekdays:
-                # Если нет выбранных дней на этой неделе, берем первый выбранный день на следующей неделе
                 next_weekday = min(int(day) for day in selected_weekdays)
                 days_to_next_weekday = (7 - current_week_day + next_weekday) % 7
             else:
@@ -254,18 +208,88 @@ def main(page: ft.Page):
         next_weekday_date = datetime.datetime.now() + datetime.timedelta(days=days_to_next_weekday)
         time_diff = datetime.datetime.combine(next_weekday_date.date(), scheduled_time) - datetime.datetime.combine(
             datetime.date.today(), current_time)
-        print(time_diff)
         seconds_to_wait = max(time_diff.total_seconds(),0)
-        print(seconds_to_wait)
-        if task.type == "default1":
-            thread = threading.Timer(seconds_to_wait, lambda: task_queue1.put(task))
-            thread.start()
-            task.thread = thread
-        elif task.type == "default2":
-            thread = threading.Timer(seconds_to_wait, lambda: task_queue2.put(task))
-            thread.start()
-            task.thread = thread
-        # print("close_execute_task func")
+        return seconds_to_wait
+
+    def execute_task(task):
+
+        task.deactivate_button.disabled = True
+        task.prog_ring.visible = True
+        page.update()
+        selected_weekdays = task.segment_but.selected #выбраные дни недели
+        current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+        current_week_day = datetime.datetime.now().weekday() #текущий день недели
+        scheduled_time = datetime.datetime.strptime(task.schedule_time.value, "%H:%M:%S").time() #запланированное время
+
+        # Проверяем зависимости
+        dependencies_met = dependency(
+            dependency_path=task.dependency_path.value,
+            server=task.sql_dependency.server.value,
+            database=task.sql_dependency.database.value,
+        )
+        #print(dependencies_met)
+        #print(selected_weekdays)
+        if not dependencies_met and str(current_week_day) in selected_weekdays:
+            # Если зависимости не выполнены, переносим задачу в очередь через 1200 секунд
+            if task.type == "default1":
+                thread = threading.Timer(12, lambda: task_queue1.put(task))
+                thread.start()
+                task.thread = thread
+            elif task.type == "default2":
+                thread = threading.Timer(12, lambda: task_queue2.put(task))
+                thread.start()
+                task.thread = thread
+            tab_logs.content.controls.append(ft.Text(f"{current_time}: Tables for task {task.name.value} are not updated"))
+            task.prog_ring.visible = False
+            task.deactivate_button.disabled = False
+            page.update()
+            return
+        elif dependencies_met and str(current_week_day) in selected_weekdays:
+            # Продолжаем выполнение задачи
+            if task.type == "default1":
+                t = task.execute_func(
+                    sql_query_path=task.in_file_path.value,
+                    csv_path=task.out_file_path.value,
+                    server=task.sql_dialog.server.value,
+                    database=task.sql_dialog.database.value,
+                )
+            elif task.type == "default2":
+                t = task.execute_func(
+                    excel_path=task.in_file_path.value,
+                    directory_path=task.out_file_path.value,
+                )
+            tab_logs.content.controls.append(ft.Text(f'{datetime.datetime.now().strftime("%Y-%m-%d %H:%M")}: {t}'))
+            task.prog_ring.visible = False
+            task.deactivate_button.disabled = False
+            if t.startswith("Файл обновлен"):
+                task.last_update_time.value = f'{datetime.datetime.now().strftime("%Y-%m-%d %H:%M")}'
+            page.update()
+            seconds_to_wait = calculate_time_difference(task_schedule_time=scheduled_time, selected_weekdays=selected_weekdays)
+            #print(seconds_to_wait)
+            if task.type == "default1":
+                thread = threading.Timer(seconds_to_wait, lambda: task_queue1.put(task))
+                thread.start()
+                task.thread = thread
+            elif task.type == "default2":
+                thread = threading.Timer(seconds_to_wait, lambda: task_queue2.put(task))
+                thread.start()
+                task.thread = thread
+        else:
+            
+            task.prog_ring.visible = False
+            task.deactivate_button.disabled = False         
+            seconds_to_wait = calculate_time_difference(task_schedule_time=scheduled_time, selected_weekdays=selected_weekdays)
+            tab_logs.content.controls.append(ft.Text(f'{datetime.datetime.now().strftime("%Y-%m-%d %H:%M")}: {task.name.value} update has been moved to the next date'))
+            page.update()
+            #print(seconds_to_wait)
+            if task.type == "default1":
+                thread = threading.Timer(seconds_to_wait, lambda: task_queue1.put(task))
+                thread.start()
+                task.thread = thread
+            elif task.type == "default2":
+                thread = threading.Timer(seconds_to_wait, lambda: task_queue2.put(task))
+                thread.start()
+                task.thread = thread
 
 
     def active_(task):
