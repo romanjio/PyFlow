@@ -232,11 +232,11 @@ def main(page: ft.Page):
         if not dependencies_met and str(current_week_day) in selected_weekdays:
             # Если зависимости не выполнены, переносим задачу в очередь через 1200 секунд
             if task.type == "default1":
-                thread = threading.Timer(12, lambda: task_queue1.put(task))
+                thread = threading.Timer(1200, lambda: task_queue1.put(task))
                 thread.start()
                 task.thread = thread
             elif task.type == "default2":
-                thread = threading.Timer(12, lambda: task_queue2.put(task))
+                thread = threading.Timer(1200, lambda: task_queue2.put(task))
                 thread.start()
                 task.thread = thread
             tab_logs.content.controls.append(ft.Text(f"{current_time}: Tables for task {task.name.value} are not updated"))
